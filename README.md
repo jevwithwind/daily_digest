@@ -69,25 +69,34 @@ Or if installed as a package:
 daily-digest
 ```
 
-## Automation with launchd (macOS)
+## Automation with Calendar App (macOS)
 
-To run this script automatically every day at 7 AM JST, you can use the provided launchd job:
+To run this script automatically every day at 9 AM JST using the Calendar app:
 
-1. The job is already set up in `~/Library/LaunchAgents/com.daily.digest.plist`
-2. It runs daily at 7:00 AM JST
-3. Output is logged to `/tmp/daily_digest.out`
-4. Errors are logged to `/tmp/daily_digest.err`
+1. Make sure the `run_daily_digest.sh` script is executable:
+   ```bash
+   chmod +x run_daily_digest.sh
+   ```
 
-To unload the job (stop the automation):
-```bash
-launchctl unload ~/Library/LaunchAgents/com.daily.digest.plist
-```
+2. Open the Calendar app on your Mac
 
-To reload the job (after making changes):
-```bash
-launchctl unload ~/Library/LaunchAgents/com.daily.digest.plist
-launchctl load ~/Library/LaunchAgents/com.daily.digest.plist
-```
+3. Create a new event:
+   - Title: "Daily Digest Job"
+   - Time: 9:00 AM
+   - Repeat: Daily
+   - Alert: Custom → "Open file" → Select `run_daily_digest.sh`
+
+4. The script will run daily at 9:00 AM JST when your Mac is awake and unlocked
+
+5. Execution is logged to `/tmp/daily_digest_calendar_run.log`
+
+**Important notes:**
+- Your Mac must be awake and unlocked at 9:00 AM for the script to run
+- If your Mac is asleep at the scheduled time, the event will be missed
+- The script runs in your user session, ensuring access to browser cookies needed for YouTube access
+- Make sure your .env file contains all required environment variables
+
+To disable the automation, simply delete the calendar event.
 
 ## How It Works
 
