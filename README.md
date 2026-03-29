@@ -69,6 +69,26 @@ Or if installed as a package:
 daily-digest
 ```
 
+## Automation with launchd (macOS)
+
+To run this script automatically every day at 7 AM JST, you can use the provided launchd job:
+
+1. The job is already set up in `~/Library/LaunchAgents/com.daily.digest.plist`
+2. It runs daily at 7:00 AM JST
+3. Output is logged to `/tmp/daily_digest.out`
+4. Errors are logged to `/tmp/daily_digest.err`
+
+To unload the job (stop the automation):
+```bash
+launchctl unload ~/Library/LaunchAgents/com.daily.digest.plist
+```
+
+To reload the job (after making changes):
+```bash
+launchctl unload ~/Library/LaunchAgents/com.daily.digest.plist
+launchctl load ~/Library/LaunchAgents/com.daily.digest.plist
+```
+
 ## How It Works
 
 1. **Fetch Video**: Gets the latest video from https://www.youtube.com/@pivot00
