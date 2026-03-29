@@ -31,6 +31,9 @@ def load_env():
         'EMAIL_TO'
     ]
     
+    # YT_BROWSER is optional, so we don't include it in required vars
+    # but we still load it if present
+    
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     if missing_vars:
         print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
@@ -42,11 +45,13 @@ def get_latest_video_info():
     """Fetch the latest video from the Pivot Talk channel."""
     print("Fetching latest video from Pivot Talk channel...")
     
+    browser = os.getenv('YT_BROWSER', 'chrome')
     ydl_opts = {
         'extract_flat': True,
         'playlistend': 1,
         'quiet': True,
-        'extractor_args': {'youtube': {'skip': ['hls', 'dash']}}
+        'extractor_args': {'youtube': {'skip': ['hls', 'dash']}},
+        'cookiesfrombrowser': (browser,),
     }
     
     try:
@@ -93,6 +98,7 @@ def download_audio(video_url):
     with tempfile.NamedTemporaryFile(suffix='.m4a', delete=False) as temp_audio:
         temp_path = temp_audio.name
     
+    browser = os.getenv('YT_BROWSER', 'chrome')
     try:
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -109,6 +115,7 @@ def download_audio(video_url):
             'audioformat': 'm4a',
             'outtmpl': temp_path.replace('.m4a', ''),
             'quiet': True,
+            'cookiesfrombrowser': (browser,),
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -171,7 +178,7 @@ def summarize_text(transcript):
             messages=[
                 {
                     "role": "system",
-                    "content": "あなたはポッドキャストの要約アシスタントです。以下のトランスクリプトを日本語で簡潔に要約してください。箇条書きで主要なポイントを5〜8個にまとめてください。"
+                    "content": "あなたはポッドキャストの要約アシスタントです。以下のトランスクリプトを日本語で簡潔に要約してください。箇条書きは使わず、1つの段落にまとめてください。"
                 },
                 {
                     "role": "user",
@@ -195,6 +202,45 @@ def summarize_text(transcript):
         sys.exit(1)
 
 
+def format_transcript_for_email(transcript):
+    """Format the transcript with paragraph breaks every ~500 chars at nearest punctuation."""
+    if len(transcript) <= 500:
+        return transcript
+    
+    formatted = []
+    start = 0
+    
+    while start < len(transcript):
+        end = start + 500
+        
+        # If we're near the end of the transcript, take the remainder
+        if end >= len(transcript):
+            formatted.append(transcript[start:])
+            break
+        
+        # Look for the nearest punctuation mark to break at
+        segment = transcript[start:end]
+        punct_positions = []
+        
+        # Find positions of Japanese punctuation marks
+        for i, char in enumerate(segment):
+            if char in ['。', '！', '？', '.', '!', '?']:
+                punct_positions.append(i)
+        
+        # If we found punctuation, break after the last one
+        if punct_positions:
+            last_punct = punct_positions[-1]
+            actual_end = start + last_punct + 1
+            formatted.append(transcript[start:actual_end].strip())
+            start = actual_end
+        else:
+            # If no punctuation found, break at 500 chars
+            formatted.append(transcript[start:end].strip())
+            start = end
+    
+    return '\n\n'.join(formatted)
+
+
 def send_email(video_info, summary, transcript):
     """Send the email with video info, summary, and transcript."""
     print("Sending email...")
@@ -203,14 +249,18 @@ def send_email(video_info, summary, transcript):
     
     subject = f"[Pivot Talk] {video_info['title']} - {video_info['formatted_date']}"
     
-    email_body = f"""{video_info['url']}
+    formatted_transcript = format_transcript_for_email(transcript)
+    
+    email_body = f"""🔗 動画リンク: {video_info['url']}
 
-【要約】
+📝 要約:
 {summary}
 
---------------------------------------------------
-【全文文字起こし】
-{transcript}
+────────────────────────────
+
+📖 トランスクリプト:
+
+{formatted_transcript}
 """
     
     try:

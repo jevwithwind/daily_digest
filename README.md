@@ -53,6 +53,8 @@ QWEN_CODING_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
 RESEND_API_KEY=re_xxx
 EMAIL_FROM=you@yourdomain.com
 EMAIL_TO=you@example.com
+YT_BROWSER=chrome  # Optional: Browser to use for YouTube cookies (chrome, safari, firefox, etc.)
+YT_BROWSER=chrome
 ```
 
 ## Usage
