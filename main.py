@@ -5,6 +5,8 @@ Fetches the latest Pivot Talk YouTube video, transcribes the audio,
 summarizes it in Japanese, and emails the result via Resend.
 """
 
+import logging
+import logging.handlers
 import os
 import sys
 import tempfile
@@ -19,6 +21,32 @@ from openai import OpenAI
 import resend
 
 
+def setup_logging():
+    """Configure logging to write to both stdout and a rotating file."""
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    log_format = "%(asctime)s [%(levelname)s] %(message)s"
+    date_format = "%Y-%m-%dT%H:%M:%S"
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+    root_logger.addHandler(console_handler)
+
+    # Rotating file handler (5 MB per file, 3 backups)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "daily_digest.log",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+    )
+    file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+    root_logger.addHandler(file_handler)
+
+
 def load_env():
     """Load environment variables from .env file."""
     dotenv.load_dotenv()
@@ -31,28 +59,47 @@ def load_env():
         'EMAIL_TO'
     ]
     
-    # YT_BROWSER is optional, so we don't include it in required vars
-    # but we still load it if present
-    
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     if missing_vars:
-        print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
-        print("Please check your .env file against .env.example")
+        logging.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+        logging.error("Please check your .env file against .env.example")
         sys.exit(1)
+
+
+LAST_VIDEO_ID_FILE = Path(__file__).parent / ".last_video_id"
+
+
+def get_last_video_id():
+    """Read the last processed video ID from file."""
+    if LAST_VIDEO_ID_FILE.exists():
+        return LAST_VIDEO_ID_FILE.read_text().strip()
+    return None
+
+
+def save_last_video_id(video_id):
+    """Save the processed video ID to file."""
+    LAST_VIDEO_ID_FILE.write_text(video_id)
+
+
+def get_cookie_opts():
+    """Get yt-dlp cookie options based on YT_COOKIES_FILE env var."""
+    cookies_file = os.getenv('YT_COOKIES_FILE')
+    if cookies_file and os.path.isfile(cookies_file):
+        return {'cookiefile': cookies_file}
+    return {}
 
 
 def get_latest_video_info():
     """Fetch the latest video from the Pivot Talk channel."""
-    print("Fetching latest video from Pivot Talk channel...")
+    logging.info("Fetching latest video from Pivot Talk channel...")
     
-    browser = os.getenv('YT_BROWSER', 'chrome')
     ydl_opts = {
         'extract_flat': True,
         'playlistend': 1,
         'quiet': True,
         'extractor_args': {'youtube': {'skip': ['hls', 'dash']}},
-        'cookiesfrombrowser': (browser,),
     }
+    ydl_opts.update(get_cookie_opts())
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -63,7 +110,7 @@ def get_latest_video_info():
                 video_id = video.get('id')
                 
                 if not video_id:
-                    print("Error: Could not extract video ID from the latest video")
+                    logging.error("Could not extract video ID from the latest video")
                     sys.exit(1)
                 
                 video_info = {
@@ -80,25 +127,24 @@ def get_latest_video_info():
                 else:
                     video_info['formatted_date'] = 'Unknown'
                 
-                print(f"Found video: {video_info['title']}")
+                logging.info(f"Found video: {video_info['title']}")
                 return video_info
             else:
-                print("Error: No videos found in the channel")
+                logging.error("No videos found in the channel")
                 sys.exit(1)
                 
     except Exception as e:
-        print(f"Error fetching video info: {str(e)}")
+        logging.exception(f"Error fetching video info: {str(e)}")
         sys.exit(1)
 
 
 def download_audio(video_url):
     """Download audio from the video URL using yt-dlp."""
-    print("Downloading audio...")
+    logging.info("Downloading audio...")
     
     with tempfile.NamedTemporaryFile(suffix='.m4a', delete=False) as temp_audio:
         temp_path = temp_audio.name
     
-    browser = os.getenv('YT_BROWSER', 'chrome')
     try:
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -115,8 +161,8 @@ def download_audio(video_url):
             'audioformat': 'm4a',
             'outtmpl': temp_path.replace('.m4a', ''),
             'quiet': True,
-            'cookiesfrombrowser': (browser,),
         }
+        ydl_opts.update(get_cookie_opts())
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
@@ -134,14 +180,14 @@ def download_audio(video_url):
                     break
         
         if not os.path.exists(temp_path):
-            print("Error: Failed to download audio")
+            logging.error("Failed to download audio")
             sys.exit(1)
         
-        print(f"Audio downloaded to temporary file: {temp_path}")
+        logging.info(f"Audio downloaded to temporary file: {temp_path}")
         return temp_path
         
     except Exception as e:
-        print(f"Error downloading audio: {str(e)}")
+        logging.exception(f"Error downloading audio: {str(e)}")
         if os.path.exists(temp_path):
             os.unlink(temp_path)
         sys.exit(1)
@@ -149,23 +195,23 @@ def download_audio(video_url):
 
 def transcribe_audio(audio_path: str) -> str:
     """Transcribe audio using local Whisper model."""
-    print("Loading Whisper model...")
+    logging.info("Loading Whisper model...")
     model = whisper.load_model("turbo")
-    print("Transcribing audio (this may take a few minutes)...")
+    logging.info("Transcribing audio (this may take a few minutes)...")
     result = model.transcribe(audio_path, language="ja")
     transcript = result["text"]
     
     if not transcript.strip():
-        print("Error: Transcription returned empty result")
+        logging.error("Transcription returned empty result")
         sys.exit(1)
     
-    print("Audio transcription completed")
+    logging.info("Audio transcription completed")
     return transcript
 
 
 def summarize_text(transcript):
     """Summarize the transcript in Japanese using Qwen Coding Plan API."""
-    print("Summarizing transcript...")
+    logging.info("Summarizing transcript...")
     
     coding_client = OpenAI(
         api_key=os.getenv('QWEN_CODING_API_KEY'),
@@ -191,14 +237,14 @@ def summarize_text(transcript):
         summary = response.choices[0].message.content
         
         if not summary.strip():
-            print("Error: Summary generation returned empty result")
+            logging.error("Summary generation returned empty result")
             sys.exit(1)
         
-        print("Summary generated")
+        logging.info("Summary generated")
         return summary
         
     except Exception as e:
-        print(f"Error generating summary: {str(e)}")
+        logging.exception(f"Error generating summary: {str(e)}")
         sys.exit(1)
 
 
@@ -243,7 +289,7 @@ def format_transcript_for_email(transcript):
 
 def send_email(video_info, summary, transcript):
     """Send the email with video info, summary, and transcript."""
-    print("Sending email...")
+    logging.info("Sending email...")
     
     resend.api_key = os.getenv('RESEND_API_KEY')
     
@@ -272,22 +318,29 @@ def send_email(video_info, summary, transcript):
         }
         
         email = resend.Emails.send(params)
-        print(f"Email sent successfully with ID: {email['id']}")
+        logging.info(f"Email sent successfully with ID: {email['id']}")
         
     except Exception as e:
-        print(f"Error sending email: {str(e)}")
+        logging.exception(f"Error sending email: {str(e)}")
         sys.exit(1)
 
 
 def main():
     """Main function to orchestrate the entire process."""
-    print("Starting Daily Digest process...")
+    setup_logging()
+    logging.info("Starting Daily Digest process...")
     
     # Load environment variables
     load_env()
     
     # Step 1: Fetch latest video
     video_info = get_latest_video_info()
+    
+    # Check if this video was already processed
+    last_video_id = get_last_video_id()
+    if video_info['id'] == last_video_id:
+        logging.info("No new video since last run, skipping")
+        sys.exit(0)
     
     # Step 2: Download audio
     audio_path = None
@@ -303,7 +356,10 @@ def main():
         # Step 5: Send email
         send_email(video_info, summary, transcript)
         
-        print("Process completed successfully!")
+        # Only save the video ID after successful email send
+        save_last_video_id(video_info['id'])
+        
+        logging.info("Process completed successfully!")
         
     finally:
         # Clean up temporary audio file

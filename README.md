@@ -53,8 +53,7 @@ QWEN_CODING_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
 RESEND_API_KEY=re_xxx
 EMAIL_FROM=you@yourdomain.com
 EMAIL_TO=you@example.com
-YT_BROWSER=chrome  # Optional: Browser to use for YouTube cookies (chrome, safari, firefox, etc.)
-YT_BROWSER=chrome
+YT_COOKIES_FILE=./cookies.txt  # Optional: Path to YouTube cookies.txt file
 ```
 
 ## Usage
@@ -69,34 +68,36 @@ Or if installed as a package:
 daily-digest
 ```
 
-## Automation with Calendar App (macOS)
+## Automation with cron (Linux)
 
-To run this script automatically every day at 9 AM JST using the Calendar app:
+To run this script automatically every day at 9 AM JST using cron:
 
-1. Make sure the `run_daily_digest.sh` script is executable:
+1. **Export YouTube cookies** from a browser where you're logged into YouTube:
+   - Use a browser extension like "Get cookies.txt LOCALLY" or `yt-dlp --cookies-from-browser chrome --cookies cookies.txt`
+   - Place the resulting `cookies.txt` file in the project directory (or wherever `YT_COOKIES_FILE` points)
+
+2. **Make the Linux wrapper script executable:**
    ```bash
-   chmod +x run_daily_digest.sh
+   chmod +x run_on_linux.sh
    ```
 
-2. Open the Calendar app on your Mac
+3. **Add a crontab entry:**
+   ```bash
+   crontab -e
+   ```
+   Add the following line (adjust the path to your project directory):
+   ```
+   0 9 * * * /path/to/daily_digest/run_on_linux.sh
+   ```
 
-3. Create a new event:
-   - Title: "Daily Digest Job"
-   - Time: 9:00 AM
-   - Repeat: Daily
-   - Alert: Custom → "Open file" → Select `run_daily_digest.sh`
-
-4. The script will run daily at 9:00 AM JST when your Mac is awake and unlocked
-
-5. Execution is logged to `/tmp/daily_digest_calendar_run.log`
+4. **Logs:**
+   - Application logs are written to `logs/daily_digest.log` (rotating, 5 MB per file, 3 backups)
+   - Cron wrapper logs are written to `logs/cron.log`
 
 **Important notes:**
-- Your Mac must be awake and unlocked at 9:00 AM for the script to run
-- If your Mac is asleep at the scheduled time, the event will be missed
-- The script runs in your user session, ensuring access to browser cookies needed for YouTube access
-- Make sure your .env file contains all required environment variables
-
-To disable the automation, simply delete the calendar event.
+- The script skips processing if no new video has been posted since the last run
+- YouTube cookies may need periodic re-export when the session expires (typically weeks to months)
+- The script exits cleanly with code 0 when skipping, so cron won't report false failures
 
 ## How It Works
 

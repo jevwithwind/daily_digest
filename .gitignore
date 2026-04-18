@@ -1,5 +1,10 @@
 # Environment variables
 .env
+cookies.txt
+.last_video_id
+
+# Logs
+logs/
 
 # Python
 __pycache__/
