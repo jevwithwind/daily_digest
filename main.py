@@ -5,6 +5,7 @@ Fetches the latest Pivot Talk YouTube video, transcribes the audio,
 summarizes it in Japanese, and emails the result via Resend.
 """
 
+import argparse
 import logging
 import logging.handlers
 import os
@@ -32,8 +33,10 @@ def setup_logging():
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler (UTF-8 to handle Japanese characters on Windows)
+    console_handler = logging.StreamHandler(
+        stream=open(sys.stdout.fileno(), mode='w', encoding='utf-8', closefd=False)
+    )
     console_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
     root_logger.addHandler(console_handler)
 
@@ -98,6 +101,7 @@ def get_latest_video_info():
         'playlistend': 1,
         'quiet': True,
         'extractor_args': {'youtube': {'skip': ['hls', 'dash']}},
+        'js_runtimes': {'node': {'path': 'C:/Program Files/nodejs/node.exe'}},
     }
     ydl_opts.update(get_cookie_opts())
     
@@ -147,7 +151,7 @@ def download_audio(video_url):
     
     try:
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio*',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'm4a',
@@ -161,6 +165,8 @@ def download_audio(video_url):
             'audioformat': 'm4a',
             'outtmpl': temp_path.replace('.m4a', ''),
             'quiet': True,
+            'js_runtimes': {'node': {'path': 'C:/Program Files/nodejs/node.exe'}},
+            'ffmpeg_location': FFMPEG_BIN,
         }
         ydl_opts.update(get_cookie_opts())
         
@@ -325,22 +331,32 @@ def send_email(video_info, summary, transcript):
         sys.exit(1)
 
 
+FFMPEG_BIN = r'C:\Users\kevin2\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin'
+
+
 def main():
     """Main function to orchestrate the entire process."""
+    parser = argparse.ArgumentParser(description="Daily Digest — fetch, transcribe, summarize, email")
+    parser.add_argument("--force", action="store_true", help="Skip dedup check and reprocess the latest video")
+    args = parser.parse_args()
+
+    if FFMPEG_BIN not in os.environ.get('PATH', ''):
+        os.environ['PATH'] = FFMPEG_BIN + os.pathsep + os.environ.get('PATH', '')
     setup_logging()
     logging.info("Starting Daily Digest process...")
-    
+
     # Load environment variables
     load_env()
-    
+
     # Step 1: Fetch latest video
     video_info = get_latest_video_info()
-    
-    # Check if this video was already processed
-    last_video_id = get_last_video_id()
-    if video_info['id'] == last_video_id:
-        logging.info("No new video since last run, skipping")
-        sys.exit(0)
+
+    # Check if this video was already processed (skipped when --force is passed)
+    if not args.force:
+        last_video_id = get_last_video_id()
+        if video_info['id'] == last_video_id:
+            logging.info("No new video since last run, skipping")
+            sys.exit(0)
     
     # Step 2: Download audio
     audio_path = None
