@@ -42,3 +42,12 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Lock file (platform-specific, Docker handles reproducibility)
+uv.lock
+
+# Temporary audio files
+*.m4a
+*.mp3
+*.webm
+*.wav

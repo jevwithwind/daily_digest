@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow — Japanese Shadowing Practice</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Shadow</h1>
+            <p class="subtitle">Japanese shadowing practice</p>
+        </header>
+
+        <section class="url-input-section">
+            <div class="input-group">
+                <input
+                    type="text"
+                    id="videoUrl"
+                    placeholder="Paste YouTube URL..."
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+                <button id="loadBtn" onclick="loadVideo()">Load</button>
+            </div>
+            <div id="loadStatus" class="status hidden"></div>
+        </section>
+
+        <section id="practiceSection" class="practice-section hidden">
+            <div class="paragraph-header">
+                <button class="nav-btn" onclick="prevParagraph()" id="prevBtn">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <span id="paragraphIndicator">Paragraph 1 / 1</span>
+                <button class="nav-btn" onclick="nextParagraph()" id="nextBtn">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="paragraph-card">
+                <p id="paragraphText" class="paragraph-text"></p>
+            </div>
+
+            <div class="controls">
+                <button id="listenBtn" class="btn btn-secondary" onclick="playAudio()">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M3 4L14 9L3 14V4Z" fill="currentColor"/>
+                    </svg>
+                    Listen
+                </button>
+                <button id="recordBtn" class="btn btn-primary" onclick="toggleRecording()">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <circle cx="9" cy="9" r="5" fill="currentColor"/>
+                    </svg>
+                    Record
+                </button>
+            </div>
+
+            <div id="feedbackSection" class="feedback-section hidden">
+                <div class="feedback-header">
+                    <h3>Feedback</h3>
+                    <span id="accuracyBadge" class="accuracy-badge"></span>
+                </div>
+                <div id="diffDisplay" class="diff-display"></div>
+                <div id="missingSection" class="missing-section hidden">
+                    <h4>Missing</h4>
+                    <p id="missingText"></p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p class="shortcuts">
+                <kbd>Space</kbd> Listen &middot;
+                <kbd>R</kbd> Record &middot;
+                <kbd>&larr;</kbd> Prev &middot;
+                <kbd>&rarr;</kbd> Next
+            </p>
+        </footer>
+    </div>
+
+    <audio id="audioPlayer" preload="auto"></audio>
+    <script src="/static/app.js"></script>
+</body>
+</html>

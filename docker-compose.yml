@@ -1,0 +1,15 @@
+services:
+  shadow:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - whisper-cache:/root/.cache/whisper
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+      - ./cookies.txt:/app/cookies.txt:ro
+    env_file: .env
+    restart: unless-stopped
+
+volumes:
+  whisper-cache:
