@@ -32,6 +32,8 @@ Shadow depends on:
 
 Without Docker, you'd need to manually install and version-match all of these on **every machine** you use. With Docker, the `Dockerfile` defines the exact environment once, and `docker compose up` reproduces it everywhere.
 
+**Note:** Docker is completely isolated from your local Python setup. If you use conda environments (e.g. `localdb`) for development, Docker does not interact with them in any way. Your conda environments remain untouched and fully usable alongside Docker.
+
 ---
 
 ## Part 2: What Changed in This Session

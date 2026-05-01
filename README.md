@@ -33,6 +33,15 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 # open http://localhost:8000
 ```
 
+**Using conda?** If you already have a conda environment (e.g. `localdb`) with Python 3.11+:
+
+```
+conda activate localdb
+pip install -e .
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+# open http://localhost:8000
+```
+
 ---
 
 ## What You Can Do
