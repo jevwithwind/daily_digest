@@ -1,6 +1,6 @@
-# Shadow
+# Kageyomi
 
-> A Japanese language shadowing practice tool. Paste a YouTube URL, get an interactive paragraph-by-paragraph interface with real-time pronunciation feedback.
+> 影読 — A Japanese language shadowing practice tool. Paste a YouTube URL or any Japanese text, get an interactive paragraph-by-paragraph interface with real-time pronunciation feedback.
 
 Also includes a legacy email digest mode for automated daily summaries.
 

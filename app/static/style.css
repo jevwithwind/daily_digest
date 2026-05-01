@@ -61,9 +61,51 @@ header h1 {
     margin-top: 0.25rem;
 }
 
-/* URL Input */
-.url-input-section {
+/* Input Section */
+.input-section {
     margin-bottom: 2rem;
+}
+
+.mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px;
+}
+
+.mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+}
+
+.mode-btn:hover {
+    color: var(--text-primary);
+}
+
+.mode-btn.active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.input-panel {
+    /* container for each mode's input */
 }
 
 .input-group {
@@ -92,7 +134,45 @@ header h1 {
     color: var(--text-muted);
 }
 
-#loadBtn {
+#textArea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.15s;
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.6;
+}
+
+#textArea:focus {
+    border-color: var(--accent);
+}
+
+#textArea::placeholder {
+    color: var(--text-muted);
+}
+
+.text-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+}
+
+.char-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+#loadBtn,
+#loadTextBtn {
     padding: 0.75rem 1.5rem;
     background: var(--accent);
     color: var(--bg-primary);
@@ -105,11 +185,13 @@ header h1 {
     white-space: nowrap;
 }
 
-#loadBtn:hover {
+#loadBtn:hover,
+#loadTextBtn:hover {
     background: var(--accent-hover);
 }
 
-#loadBtn:disabled {
+#loadBtn:disabled,
+#loadTextBtn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
@@ -407,8 +489,15 @@ kbd {
         flex-direction: column;
     }
 
-    #loadBtn {
+    #loadBtn,
+    #loadTextBtn {
         width: 100%;
+    }
+
+    .text-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: stretch;
     }
 
     .controls {

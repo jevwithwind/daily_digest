@@ -1,5 +1,6 @@
 """Video loading and management routes."""
 
+import hashlib
 import logging
 import os
 import threading
@@ -22,10 +23,14 @@ class LoadRequest(BaseModel):
     url: str
 
 
+class LoadTextRequest(BaseModel):
+    text: str
+
+
 class VideoStatus(BaseModel):
     video_id: str
     title: str
-    status: str  # "processing", "ready", "error"
+    status: str
     progress: Optional[str] = None
     paragraph_count: Optional[int] = None
     error: Optional[str] = None
@@ -194,3 +199,58 @@ def _process_video(video_id: str, url: str):
         cache["status"] = "error"
         cache["error"] = str(e)
         video_cache[video_id] = cache
+
+
+@router.post("/load-text")
+async def load_text(req: LoadTextRequest):
+    """Process pasted text: chunk into paragraphs, store in cache. Synchronous."""
+    text = req.text.strip()
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+
+    if len(text) > 100_000:
+        raise HTTPException(status_code=400, detail="Text too long (max 100,000 characters)")
+
+    # Generate a stable ID from text content for caching
+    text_hash = hashlib.sha256(text.encode()).hexdigest()[:12]
+    text_id = f"text_{text_hash}"
+
+    # Return cached result if already processed
+    if text_id in video_cache and video_cache[text_id].get("status") == "ready":
+        return {
+            "video_id": text_id,
+            "title": video_cache[text_id]["title"],
+            "status": "ready",
+            "paragraph_count": video_cache[text_id]["paragraph_count"],
+        }
+
+    try:
+        # Chunk the text using existing LLM chunker
+        paragraphs = chunk_transcript(text)
+
+        # Store in cache (no audio available for text mode)
+        video_cache[text_id] = {
+            "video_id": text_id,
+            "title": f"Custom Text ({len(text)} chars)",
+            "status": "ready",
+            "paragraph_count": len(paragraphs),
+            "paragraphs": [
+                {"index": i, "text": para, "audio_available": False}
+                for i, para in enumerate(paragraphs)
+            ],
+            "mode": "text",
+        }
+
+        logging.info(f"Text {text_id} processed: {len(paragraphs)} paragraphs")
+
+        return {
+            "video_id": text_id,
+            "title": video_cache[text_id]["title"],
+            "status": "ready",
+            "paragraph_count": len(paragraphs),
+        }
+
+    except Exception as e:
+        logging.exception(f"Error processing text {text_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to process text: {str(e)}")

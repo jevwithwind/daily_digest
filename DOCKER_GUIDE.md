@@ -1,6 +1,6 @@
 # Docker & Project Guide
 
-This is your personal reference for Docker setup, the Shadow project, and how to manage it across machines.
+This is your personal reference for Docker setup, the Kageyomi project, and how to manage it across machines.
 
 ---
 

@@ -1,19 +1,35 @@
 const API_BASE = '';
 
-let state = {
-    videoId: null,
-    paragraphs: [],
-    currentIndex: 0,
+const state = {
+    mode: 'youtube',
+    sessions: {
+        youtube: { videoId: null, paragraphs: [], currentIndex: 0 },
+        text:    { videoId: null, paragraphs: [], currentIndex: 0, rawText: '' },
+    },
     isRecording: false,
     mediaRecorder: null,
     audioChunks: [],
     audioPlayer: document.getElementById('audioPlayer'),
+
+    get session() {
+        return this.sessions[this.mode];
+    },
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     restoreSession();
     setupKeyboardShortcuts();
+    setupCharCounter();
 });
+
+function setupCharCounter() {
+    const ta = document.getElementById('textArea');
+    const counter = document.getElementById('charCount');
+    ta.addEventListener('input', () => {
+        const len = ta.value.length;
+        counter.textContent = `${len.toLocaleString()} character${len !== 1 ? 's' : ''}`;
+    });
+}
 
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
@@ -44,27 +60,83 @@ function setupKeyboardShortcuts() {
 }
 
 function restoreSession() {
-    const saved = localStorage.getItem('shadow_session');
-    if (saved) {
-        try {
-            const session = JSON.parse(saved);
-            if (session.videoId && session.url) {
-                document.getElementById('videoUrl').value = session.url;
-                loadVideo(session.videoId);
-            }
-        } catch (e) {
-            localStorage.removeItem('shadow_session');
+    const saved = localStorage.getItem('kageyomi_session');
+    if (!saved) return;
+
+    try {
+        const data = JSON.parse(saved);
+
+        if (data.mode) {
+            state.mode = data.mode;
+            updateModeUI();
         }
+
+        if (data.sessions) {
+            if (data.sessions.youtube?.videoId) {
+                state.sessions.youtube = data.sessions.youtube;
+            }
+            if (data.sessions.text?.videoId) {
+                state.sessions.text = data.sessions.text;
+                document.getElementById('textArea').value = data.sessions.text.rawText || '';
+                document.getElementById('charCount').textContent =
+                    `${(data.sessions.text.rawText || '').length.toLocaleString()} characters`;
+            }
+        }
+
+        const s = state.session;
+        if (s.videoId && s.paragraphs.length > 0) {
+            showPracticeSectionFromState();
+        }
+    } catch (e) {
+        localStorage.removeItem('kageyomi_session');
     }
 }
 
 function saveSession() {
-    const session = {
-        videoId: state.videoId,
-        url: document.getElementById('videoUrl').value,
-        currentIndex: state.currentIndex,
+    const data = {
+        mode: state.mode,
+        sessions: {
+            youtube: { ...state.sessions.youtube },
+            text: { ...state.sessions.text },
+        },
     };
-    localStorage.setItem('shadow_session', JSON.stringify(session));
+
+    // Store raw text for text mode (only if under 50KB to stay within localStorage limits)
+    if (state.mode === 'text' && state.sessions.text.rawText) {
+        data.sessions.text.rawText = state.sessions.text.rawText;
+    }
+
+    try {
+        localStorage.setItem('kageyomi_session', JSON.stringify(data));
+    } catch (e) {
+        // If storage is full, drop the raw text
+        if (data.sessions.text) delete data.sessions.text.rawText;
+        localStorage.setItem('kageyomi_session', JSON.stringify(data));
+    }
+}
+
+function switchMode(mode) {
+    if (mode === state.mode) return;
+    state.mode = mode;
+    updateModeUI();
+
+    const s = state.session;
+    if (s.videoId && s.paragraphs.length > 0) {
+        showPracticeSectionFromState();
+    } else {
+        document.getElementById('practiceSection').classList.add('hidden');
+        document.getElementById('loadStatus').classList.add('hidden');
+    }
+
+    saveSession();
+}
+
+function updateModeUI() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === state.mode);
+    });
+    document.getElementById('youtubeInput').classList.toggle('hidden', state.mode !== 'youtube');
+    document.getElementById('textInput').classList.toggle('hidden', state.mode !== 'text');
 }
 
 async function loadVideo(existingId = null) {
@@ -112,6 +184,53 @@ async function loadVideo(existingId = null) {
     }
 }
 
+async function loadText() {
+    const textArea = document.getElementById('textArea');
+    const loadBtn = document.getElementById('loadTextBtn');
+    const statusEl = document.getElementById('loadStatus');
+
+    const text = textArea.value.trim();
+    if (!text) return;
+
+    loadBtn.disabled = true;
+    loadBtn.textContent = 'Processing...';
+    statusEl.className = 'status';
+    statusEl.classList.remove('hidden');
+    statusEl.innerHTML = '<span class="spinner"></span>Chunking text...';
+
+    try {
+        const res = await fetch(`${API_BASE}/api/load-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to process text');
+        }
+
+        const data = await res.json();
+
+        state.sessions.text.videoId = data.video_id;
+        state.sessions.text.rawText = text;
+        state.sessions.text.currentIndex = 0;
+
+        statusEl.className = 'status success';
+        statusEl.textContent = `Loaded: ${data.title} (${data.paragraph_count} paragraphs)`;
+
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Load Text';
+
+        showPracticeSectionFromState();
+    } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = `Error: ${err.message}`;
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Load Text';
+    }
+}
+
 async function pollStatus(videoId) {
     const statusEl = document.getElementById('loadStatus');
     const loadBtn = document.getElementById('loadBtn');
@@ -156,9 +275,9 @@ async function showPracticeSection(videoId) {
 
         const data = await res.json();
 
-        state.videoId = data.video_id;
-        state.paragraphs = data.paragraphs;
-        state.currentIndex = 0;
+        state.sessions.youtube.videoId = data.video_id;
+        state.sessions.youtube.paragraphs = data.paragraphs;
+        state.sessions.youtube.currentIndex = 0;
 
         statusEl.className = 'status success';
         statusEl.textContent = `Loaded: ${data.title} (${data.paragraph_count} paragraphs)`;
@@ -166,9 +285,7 @@ async function showPracticeSection(videoId) {
         loadBtn.disabled = false;
         loadBtn.textContent = 'Load';
 
-        document.getElementById('practiceSection').classList.remove('hidden');
-        renderParagraph();
-        saveSession();
+        showPracticeSectionFromState();
     } catch (err) {
         statusEl.className = 'status error';
         statusEl.textContent = `Error: ${err.message}`;
@@ -177,30 +294,50 @@ async function showPracticeSection(videoId) {
     }
 }
 
+function showPracticeSectionFromState() {
+    const s = state.session;
+    if (!s.videoId || s.paragraphs.length === 0) return;
+
+    document.getElementById('practiceSection').classList.remove('hidden');
+    renderParagraph();
+    saveSession();
+}
+
 function renderParagraph() {
-    const para = state.paragraphs[state.currentIndex];
+    const s = state.session;
+    const para = s.paragraphs[s.currentIndex];
     if (!para) return;
 
     document.getElementById('paragraphText').textContent = para.text;
     document.getElementById('paragraphIndicator').textContent =
-        `Paragraph ${state.currentIndex + 1} / ${state.paragraphs.length}`;
+        `Paragraph ${s.currentIndex + 1} / ${s.paragraphs.length}`;
 
-    document.getElementById('prevBtn').disabled = state.currentIndex === 0;
-    document.getElementById('nextBtn').disabled = state.currentIndex === state.paragraphs.length - 1;
+    document.getElementById('prevBtn').disabled = s.currentIndex === 0;
+    document.getElementById('nextBtn').disabled = s.currentIndex === s.paragraphs.length - 1;
+
+    // Show/hide Listen button based on audio availability
+    const listenBtn = document.getElementById('listenBtn');
+    if (para.audio_available) {
+        listenBtn.style.display = '';
+        updateAudioSource();
+    } else {
+        listenBtn.style.display = 'none';
+    }
 
     hideFeedback();
-    updateAudioSource();
     saveSession();
 }
 
 function updateAudioSource() {
-    const audioUrl = `${API_BASE}/api/audio/${state.videoId}/${state.currentIndex}`;
+    const audioUrl = `${API_BASE}/api/audio/${state.session.videoId}/${state.session.currentIndex}`;
     state.audioPlayer.src = audioUrl;
 }
 
 function playAudio() {
     const btn = document.getElementById('listenBtn');
     const audio = state.audioPlayer;
+
+    if (btn.style.display === 'none') return;
 
     if (audio.paused) {
         audio.play().catch(() => {});
@@ -279,7 +416,7 @@ async function submitRecording() {
 
     try {
         const res = await fetch(
-            `${API_BASE}/api/videos/${state.videoId}/paragraphs/${state.currentIndex}/compare`,
+            `${API_BASE}/api/videos/${state.session.videoId}/paragraphs/${state.session.currentIndex}/compare`,
             { method: 'POST', body: formData }
         );
 
@@ -341,15 +478,15 @@ function hideFeedback() {
 }
 
 function prevParagraph() {
-    if (state.currentIndex > 0) {
-        state.currentIndex--;
+    if (state.session.currentIndex > 0) {
+        state.session.currentIndex--;
         renderParagraph();
     }
 }
 
 function nextParagraph() {
-    if (state.currentIndex < state.paragraphs.length - 1) {
-        state.currentIndex++;
+    if (state.session.currentIndex < state.session.paragraphs.length - 1) {
+        state.session.currentIndex++;
         renderParagraph();
     }
 }
